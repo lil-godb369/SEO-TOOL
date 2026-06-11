@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SEO Tool
 
-## Getting Started
+Công cụ phân tích & tối ưu SEO cho website. Nhập một URL bất kỳ (site tự code,
+WordPress, hay trang nào khác) → nhận điểm SEO tổng và checklist chi tiết kèm
+gợi ý sửa.
 
-First, run the development server:
+## Công nghệ
+
+- **Next.js 16** (App Router) + **TypeScript**
+- **Tailwind CSS v4** — giao diện
+- **Cheerio** — phân tích HTML phía server (tránh CORS)
+- **lucide-react** — icon
+
+## Chạy dự án
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev      # chạy ở chế độ phát triển (mặc định http://localhost:3000)
+npm run build    # build production
+npm run start    # chạy bản production
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> Nếu cổng 3000 đang bận, Next.js sẽ tự dùng cổng khác (vd 3001) — xem log khi khởi động.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Biến môi trường (tùy chọn)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# .env.local
+PAGESPEED_API_KEY=...   # API key Google PageSpeed Insights cho trang /vitals
+```
 
-## Learn More
+Lấy key miễn phí tại Google Cloud Console (bật **PageSpeed Insights API**). Thiếu key trang `/vitals` vẫn chạy nhưng dễ gặp lỗi quota (HTTP 429).
 
-To learn more about Next.js, take a look at the following resources:
+## Cấu trúc
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├── app/
+│   ├── page.tsx                # Dashboard (ô nhập URL + hiển thị kết quả)
+│   ├── audit/page.tsx          # Audit kỹ thuật + trình tạo robots/sitemap
+│   ├── vitals/page.tsx         # Core Web Vitals (PageSpeed Insights)
+│   ├── content/page.tsx        # Phân tích nội dung & từ khóa
+│   ├── schema/page.tsx         # Trình tạo JSON-LD
+│   ├── layout.tsx              # Layout gốc (lang="vi", metadata)
+│   └── api/                    # analyze · audit · vitals · content (route.ts)
+├── components/
+│   └── ScoreRing.tsx           # Vòng tròn điểm số
+└── lib/
+    ├── utils.ts                # cn() helper
+    └── seo/
+        ├── types.ts            # Kiểu dữ liệu kết quả phân tích
+        ├── onpage.ts           # ⭐ Logic chấm điểm on-page SEO
+        ├── schema.ts           # ⭐ Builder JSON-LD
+        ├── audit.ts            # ⭐ Phân loại status + builder robots/sitemap
+        ├── audit-extract.ts    # Trích link bằng cheerio (server-only)
+        ├── vitals.ts           # ⭐ Parse PageSpeed Insights → CWV
+        ├── content.ts          # ⭐ Mật độ từ khóa + readability (thuần)
+        └── content-extract.ts  # Trích nội dung bằng cheerio (server-only)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Đã có (Module 1 — On-page SEO)
 
-## Deploy on Vercel
+Phân tích & chấm điểm theo 4 nhóm:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Tiêu đề & Mô tả** — `<title>`, `meta description` (độ dài, sự hiện diện)
+2. **Cấu trúc nội dung** — H1, H2, lượng chữ, alt cho ảnh
+3. **Mạng xã hội** — Open Graph (og:title/description/image), Twitter Card
+4. **Kỹ thuật cơ bản** — lang, viewport, canonical, charset, favicon, robots (noindex)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Kèm: điểm tổng (0–100), bản xem trước kết quả Google (SERP preview), và gợi ý
+khắc phục cho từng mục.
+
+## Đã có (Module 2 — Structured Data)
+
+- Trang `/schema`: trình tạo JSON-LD cho **LocalBusiness, Product, Article, FAQPage, BreadcrumbList** — điền form, xem trước mã trực tiếp, nút copy, link kiểm tra Rich Results.
+- Module 1 nay còn **phát hiện** structured data có sẵn trên trang được phân tích (liệt kê các @type).
+
+## Đã có (Module 3 — Audit kỹ thuật)
+
+- Trang `/audit`: nhập URL → quét toàn bộ `<a href>` trên trang, kiểm tra HTTP status đồng thời (HEAD, dự phòng GET) để phát hiện **link gãy (4xx/5xx)**, **chuyển hướng 3xx** (kèm đích đến) và **lỗi kết nối/timeout**; phân loại link **nội bộ / ngoài**, lọc theo trạng thái.
+- Tự **dò `robots.txt` & `sitemap.xml`** của tên miền (có/không, mã HTTP).
+- **Trình tạo `robots.txt` và `sitemap.xml`** — sitemap điền sẵn các URL nội bộ tìm được khi quét; có nút copy & tải tệp về.
+- Giới hạn 50 link/lần quét (ưu tiên link nội bộ) để tránh quá tải/timeout.
+
+## Đã có (Module 4 — Core Web Vitals)
+
+- Trang `/vitals`: chạy **Lighthouse qua Google PageSpeed Insights API** (không cần Chrome cục bộ) cho **di động/máy tính** → điểm hiệu năng, **LCP / INP / CLS / FCP** thực tế (CrUX) + chỉ số phòng lab (FCP, LCP, TBT, CLS, Speed Index, TTI) và danh sách **cơ hội tối ưu** kèm mức tiết kiệm ước tính.
+- ⚙️ Đặt biến môi trường `PAGESPEED_API_KEY` (API key miễn phí từ Google Cloud Console) để tránh giới hạn lượt gọi; thiếu key vẫn chạy nhưng dễ gặp lỗi quota (429).
+
+## Đã có (Module 5 — Tối ưu nội dung)
+
+- Trang `/content`: phân tích **độ dễ đọc** (số từ/câu/đoạn, từ trên câu trung bình, tỉ lệ câu dài, thời gian đọc), **top từ khóa & cụm từ** kèm mật độ, và (khi nhập **từ khóa mục tiêu**) checklist đối chiếu từ khóa với tiêu đề, H1, meta, đoạn mở đầu, tiêu đề phụ, URL và mật độ.
+- Có sẵn danh sách stopword tiếng Việt để loại nhiễu khi thống kê từ khóa.
+
+## Lộ trình tiếp theo (gợi ý)
+
+- [x] ~~**Module 2**: Trình tạo Structured Data (LocalBusiness, Product, Article, FAQ, Breadcrumb)~~
+- [x] ~~**Module 3**: Audit kỹ thuật (broken link, status code) + sinh sitemap.xml/robots.txt~~
+- [x] ~~**Module 4**: Core Web Vitals qua Lighthouse (LCP/CLS/INP)~~
+- [x] ~~**Module 5**: Tối ưu nội dung (mật độ từ khóa, readability)~~
+- [ ] Render site JS nặng bằng Playwright (cho SPA không SSR)
+- [ ] Xuất báo cáo PDF
